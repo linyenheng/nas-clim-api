@@ -1,7 +1,7 @@
 fastapi==0.135.2
 uvicorn==0.42.0
 xarray==2025.6.1
-zarr==2.18.3
+zarr==3.0.8
 s3fs==2026.2.0
 numpy==2.2.6
 scipy==1.15.2
