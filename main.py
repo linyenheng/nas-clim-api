@@ -81,7 +81,7 @@ async def query_point(
             ds[var].sel(lat=lat, lon=lon, method="nearest").values
         )
         # ← 處理 NaN / inf
-        if np.isnan(val) or np.isinf(val):
+        if np.isnan(val) or np.isinf(val) or val <= -999:
             result[var] = None
         else:
             result[var] = round(val, 4)
