@@ -183,3 +183,43 @@ async def query_timeseries(
         "variables":  result,
         "colors":     ds_config["color_group1"] + ds_config["color_group2"],
     }
+
+# ── 格點覆蓋層（給地圖顯示有資料的區域）─────────────────────
+@app.get("/query/{dataset_id}/grid")
+async def query_grid(
+    dataset_id: str,
+    variable:   str = Query("flood100"),
+    downsample: int = Query(15),  # 每隔幾個點取一個
+):
+    if dataset_id not in DATASETS:
+        raise HTTPException(404, "Dataset not found")
+
+    ds_config = DATASETS[dataset_id]
+
+    if ds_config["zarr_file"] is None:
+        raise HTTPException(503, "Data not available yet")
+
+    ds   = open_zarr(ds_config["zarr_file"])
+    data = ds[variable][::downsample, ::downsample]
+
+    lons   = [round(float(v), 4) for v in data.lon.values]
+    lats   = [round(float(v), 4) for v in data.lat.values]
+    values = []
+
+    for i in range(len(lons)):
+        row = []
+        for j in range(len(lats)):
+            val = float(data[i, j].values)
+            if np.isnan(val) or np.isinf(val) or val <= -999:
+                row.append(None)
+            else:
+                row.append(round(val, 3))
+        values.append(row)
+
+    return {
+        "lons":      lons,
+        "lats":      lats,
+        "values":    values,
+        "variable":  variable,
+        "downsample": downsample,
+    }
