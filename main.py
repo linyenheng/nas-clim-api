@@ -188,8 +188,7 @@ async def query_timeseries(
 @app.get("/query/{dataset_id}/grid")
 async def query_grid(
     dataset_id: str,
-    variable:   str = Query("flood100"),
-    downsample: int = Query(15),  # 每隔幾個點取一個
+    downsample: int = Query(15),
 ):
     if dataset_id not in DATASETS:
         raise HTTPException(404, "Dataset not found")
@@ -199,27 +198,35 @@ async def query_grid(
     if ds_config["zarr_file"] is None:
         raise HTTPException(503, "Data not available yet")
 
-    ds   = open_zarr(ds_config["zarr_file"])
-    data = ds[variable][::downsample, ::downsample]
+    ds = open_zarr(ds_config["zarr_file"])
 
-    lons   = [round(float(v), 4) for v in data.lon.values]
-    lats   = [round(float(v), 4) for v in data.lat.values]
-    values = []
+    # 只檢查這 6 個變數
+    check_vars = ["surge100","surge50","surge25",
+                  "flood100","flood50","flood25"]
 
+    # 取第一個變數的座標
+    sample = ds[check_vars[0]][::downsample, ::downsample]
+    lons   = [round(float(v), 4) for v in sample.lon.values]
+    lats   = [round(float(v), 4) for v in sample.lat.values]
+
+    # 建立 has_data 矩陣：任何一個變數有值就是 True
+    has_data = np.zeros((len(lons), len(lats)), dtype=bool)
+
+    for var in check_vars:
+        data = ds[var][::downsample, ::downsample].values
+        valid = ~np.isnan(data) & ~np.isinf(data) & (data > -999)
+        has_data = has_data | valid
+
+    # 轉成 True/False 清單
+    result = []
     for i in range(len(lons)):
         row = []
         for j in range(len(lats)):
-            val = float(data[i, j].values)
-            if np.isnan(val) or np.isinf(val) or val <= -999:
-                row.append(None)
-            else:
-                row.append(round(val, 3))
-        values.append(row)
+            row.append(bool(has_data[i, j]))
+        result.append(row)
 
     return {
-        "lons":      lons,
-        "lats":      lats,
-        "values":    values,
-        "variable":  variable,
-        "downsample": downsample,
+        "lons":     lons,
+        "lats":     lats,
+        "has_data": result,
     }
