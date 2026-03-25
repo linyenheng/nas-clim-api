@@ -21,7 +21,7 @@ app.add_middleware(
 
 USE_S3 = os.environ.get("USE_S3", "false").lower() == "true"
 
-# ── 開啟 Zarr 檔案 ────────────────────────────────────────────
+# Open Zarr 
 @lru_cache(maxsize=10)
 def open_zarr(zarr_name: str) -> xr.Dataset:
     if USE_S3:
@@ -37,19 +37,19 @@ def open_zarr(zarr_name: str) -> xr.Dataset:
     else:
         return xr.open_dataset(f"data/{zarr_name}.zarr", engine="zarr")
 
-# ── Health Check ──────────────────────────────────────────────
+# check api status
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-# ── 列出資料集（給前端知道哪些有資料）────────────────────────
+# list all data
 @app.get("/datasets")
 async def get_datasets():
     result = {}
     for key, ds in DATASETS.items():
         result[key] = {
             "label":        ds["label"],
-            "available":    ds["zarr_file"] is not None,  # 是否有資料
+            "available":    ds["zarr_file"] is not None,
             "has_time":     ds["has_time"],
             "variables":    ds["variables"],
             "color_group1": ds["color_group1"],
@@ -58,7 +58,7 @@ async def get_datasets():
         }
     return result
 
-# ── 點查詢（無 time）→ Bar Plot ───────────────────────────────
+# check point
 @app.get("/query/{dataset_id}/point")
 async def query_point(
     dataset_id: str,
@@ -83,7 +83,7 @@ async def query_point(
         val = float(
             ds[var].sel(lat=lat, lon=lon, method="nearest").values
         )
-        # ← 處理 NaN / inf
+        # check nan and -999
         if np.isnan(val) or np.isinf(val) or val <= -999:
             result[var] = None
         else:
@@ -101,7 +101,7 @@ async def query_point(
     }
     
 
-# ── 單年查詢（有 time）→ Bar Plot ────────────────────────────
+# if time period
 @app.get("/query/{dataset_id}/year")
 async def query_year(
     dataset_id: str,
@@ -139,7 +139,7 @@ async def query_year(
         "colors_g2": ds_config["color_group2"],
     }
 
-# ── 時間序列（有 time）→ Line Chart ──────────────────────────
+# if yes time series
 @app.get("/query/{dataset_id}/timeseries")
 async def query_timeseries(
     dataset_id:  str,
@@ -187,7 +187,7 @@ async def query_timeseries(
         "colors":     ds_config["color_group1"] + ds_config["color_group2"],
     }
 
-# ── 格點覆蓋層（給地圖顯示有資料的區域）─────────────────────
+#  shaded where have data
 @app.get("/query/{dataset_id}/grid")
 async def query_grid(
     dataset_id: str,
@@ -215,7 +215,6 @@ async def query_grid(
 
     for var in check_vars:
         data = ds[var][::downsample, ::downsample].values
-        # 任何一個變數 > 0 才算有資料
         valid    = ~np.isnan(data) & ~np.isinf(data) & (data > 0)
         has_data = has_data | valid
 
@@ -233,7 +232,7 @@ async def query_grid(
     }
 
 
-# ── Fragility: 所有 AST 點位 ──────────────────────────────────
+# Fragility AST location
 @app.get("/fragility/points")
 async def get_fragility_points():
     if _ast_points_cache is None:
@@ -266,13 +265,13 @@ async def get_fragility_points():
 
     return {"points": points, "count": len(points)}
 
-# ── Fragility: 單一 AST 詳細（點擊圓點）──────────────────────
+#  Fragility clicking
 @app.get("/fragility/ast/{ast_id}")
 async def get_ast_detail(ast_id: int):
     if _ast_points_cache is None:
         raise HTTPException(503, "Fragility data not ready yet")
 
-    # 直接從 cache 找，不需要重新讀 zarr
+    # try cache , saving time
     pt = next(
         (p for p in _ast_points_cache["points"] if p["ast_id"] == ast_id),
         None
@@ -298,7 +297,7 @@ async def get_ast_detail(ast_id: int):
     }
 
 
-# ── 啟動時預建 AST 快取 ───────────────────────────────────────
+# default ast
 _ast_points_cache = None
 
 def build_ast_cache():
@@ -339,5 +338,5 @@ def build_ast_cache():
     except Exception as e:
         print(f"⚠ AST cache failed: {e}")
 
-# 程式啟動時執行
+# starting
 build_ast_cache()
