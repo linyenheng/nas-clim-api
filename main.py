@@ -200,24 +200,22 @@ async def query_grid(
 
     ds = open_zarr(ds_config["zarr_file"])
 
-    # 只檢查這 6 個變數
-    check_vars = ["surge100","surge50","surge25",
-                  "flood100","flood50","flood25"]
+    # topo 不參與判斷
+    check_vars = ["flood100","flood50","flood25",
+                  "surge100","surge50","surge25"]
 
-    # 取第一個變數的座標
-    sample = ds[check_vars[0]][::downsample, ::downsample]
-    lons   = [round(float(v), 4) for v in sample.lon.values]
-    lats   = [round(float(v), 4) for v in sample.lat.values]
+    sample   = ds[check_vars[0]][::downsample, ::downsample]
+    lons     = [round(float(v), 4) for v in sample.lon.values]
+    lats     = [round(float(v), 4) for v in sample.lat.values]
 
-    # 建立 has_data 矩陣：任何一個變數有值就是 True
     has_data = np.zeros((len(lons), len(lats)), dtype=bool)
 
     for var in check_vars:
         data = ds[var][::downsample, ::downsample].values
-        valid = ~np.isnan(data) & ~np.isinf(data) & (data > -999)
+        # 任何一個變數 > 0 才算有資料
+        valid    = ~np.isnan(data) & ~np.isinf(data) & (data > 0)
         has_data = has_data | valid
 
-    # 轉成 True/False 清單
     result = []
     for i in range(len(lons)):
         row = []
