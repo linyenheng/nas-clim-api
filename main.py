@@ -6,6 +6,9 @@ import numpy as np
 from functools import lru_cache
 from data_sets import DATASETS
 
+
+
+
 app = FastAPI(openapi_url=None)
 
 app.add_middleware(
@@ -228,3 +231,116 @@ async def query_grid(
         "lats":     lats,
         "has_data": result,
     }
+
+
+# ── Fragility: 所有 AST 點位 ──────────────────────────────────
+@app.get("/fragility/points")
+async def get_fragility_points():
+    if _ast_points_cache is None:
+        raise HTTPException(503, "Fragility data not ready yet")
+    return _ast_points_cache
+
+    ds = open_zarr(ds_config["zarr_file"])
+
+    lats    = ds.Latitude.values
+    lons    = ds.Longitude.values
+    ids     = ds.AST_ID.values
+    types   = ds.Type.values
+    heights = ds.Height.values
+
+    points = []
+    for i in range(len(ids)):
+        pf = ds.Pf_System_[i].values
+        sv = ds.Spill_Volume_[i].values
+        points.append({
+            "ast_id":  int(ids[i]),
+            "lat":     round(float(lats[i]), 6),
+            "lon":     round(float(lons[i]), 6),
+            "type":    str(types[i]),
+            "height":  round(float(heights[i]), 2),
+            "pf_mean": round(float(np.mean(pf)), 6),
+            "pf_std":  round(float(np.std(pf)),  6),
+            "sv_mean": round(float(np.mean(sv)), 4),
+            "sv_std":  round(float(np.std(sv)),  4),
+        })
+
+    return {"points": points, "count": len(points)}
+
+# ── Fragility: 單一 AST 詳細（點擊圓點）──────────────────────
+@app.get("/fragility/ast/{ast_id}")
+async def get_ast_detail(ast_id: int):
+    ds_config = DATASETS["fragility"]
+    if ds_config["zarr_file"] is None:
+        raise HTTPException(503, "Fragility data not available yet")
+
+    ds  = open_zarr(ds_config["zarr_file"])
+    ids = ds.AST_ID.values
+    idx = np.where(ids == ast_id)[0]
+
+    if len(idx) == 0:
+        raise HTTPException(404, f"AST_ID {ast_id} not found")
+
+    i  = idx[0]
+    pf = ds.Pf_System_[i].values
+    sv = ds.Spill_Volume_[i].values
+
+    return {
+        "ast_id": ast_id,
+        "lat":    round(float(ds.Latitude[i].values),  6),
+        "lon":    round(float(ds.Longitude[i].values), 6),
+        "type":   str(ds.Type[i].values),
+        "height": round(float(ds.Height[i].values), 2),
+        "pf": {
+            "mean": round(float(np.mean(pf)), 6),
+            "std":  round(float(np.std(pf)),  6),
+        },
+        "sv": {
+            "mean": round(float(np.mean(sv)), 4),
+            "std":  round(float(np.std(sv)),  4),
+        },
+    }
+
+
+# ── 啟動時預建 AST 快取 ───────────────────────────────────────
+_ast_points_cache = None
+
+def build_ast_cache():
+    global _ast_points_cache
+    try:
+        ds      = open_zarr("fragility_1942")
+        lats    = ds.Latitude.values
+        lons    = ds.Longitude.values
+        ids     = ds.AST_ID.values
+        types   = ds.Type.values
+        heights = ds.Height.values
+
+        pf_all  = ds.Pf_System_.values    # (5979, 1000)
+        sv_all  = ds.Spill_Volume_.values # (5979, 1000)
+
+        pf_mean = np.mean(pf_all, axis=1)
+        pf_std  = np.std(pf_all,  axis=1)
+        sv_mean = np.mean(sv_all, axis=1)
+        sv_std  = np.std(sv_all,  axis=1)
+
+        points = []
+        for i in range(len(ids)):
+            points.append({
+                "ast_id":  int(ids[i]),
+                "lat":     round(float(lats[i]), 6),
+                "lon":     round(float(lons[i]), 6),
+                "type":    str(types[i]),
+                "height":  round(float(heights[i]), 2),
+                "pf_mean": round(float(pf_mean[i]), 6),
+                "pf_std":  round(float(pf_std[i]),  6),
+                "sv_mean": round(float(sv_mean[i]), 4),
+                "sv_std":  round(float(sv_std[i]),  4),
+            })
+
+        _ast_points_cache = {"points": points, "count": len(points)}
+        print(f"✓ AST cache built: {len(points)} points")
+
+    except Exception as e:
+        print(f"⚠ AST cache failed: {e}")
+
+# 程式啟動時執行
+build_ast_cache()
