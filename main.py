@@ -269,34 +269,31 @@ async def get_fragility_points():
 # ── Fragility: 單一 AST 詳細（點擊圓點）──────────────────────
 @app.get("/fragility/ast/{ast_id}")
 async def get_ast_detail(ast_id: int):
-    ds_config = DATASETS["fragility"]
-    if ds_config["zarr_file"] is None:
-        raise HTTPException(503, "Fragility data not available yet")
+    if _ast_points_cache is None:
+        raise HTTPException(503, "Fragility data not ready yet")
 
-    ds  = open_zarr(ds_config["zarr_file"])
-    ids = ds.AST_ID.values
-    idx = np.where(ids == ast_id)[0]
+    # 直接從 cache 找，不需要重新讀 zarr
+    pt = next(
+        (p for p in _ast_points_cache["points"] if p["ast_id"] == ast_id),
+        None
+    )
 
-    if len(idx) == 0:
+    if pt is None:
         raise HTTPException(404, f"AST_ID {ast_id} not found")
-
-    i  = idx[0]
-    pf = ds.Pf_System_[i].values
-    sv = ds.Spill_Volume_[i].values
 
     return {
         "ast_id": ast_id,
-        "lat":    round(float(ds.Latitude[i].values),  6),
-        "lon":    round(float(ds.Longitude[i].values), 6),
-        "type":   str(ds.Type[i].values),
-        "height": round(float(ds.Height[i].values), 2),
+        "lat":    pt["lat"],
+        "lon":    pt["lon"],
+        "type":   pt["type"],
+        "height": pt["height"],
         "pf": {
-            "mean": round(float(np.mean(pf)), 6),
-            "std":  round(float(np.std(pf)),  6),
+            "mean": pt["pf_mean"],
+            "std":  pt["pf_std"],
         },
         "sv": {
-            "mean": round(float(np.mean(sv)), 4),
-            "std":  round(float(np.std(sv)),  4),
+            "mean": pt["sv_mean"],
+            "std":  pt["sv_std"],
         },
     }
 
