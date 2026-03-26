@@ -192,6 +192,7 @@ async def query_timeseries(
 async def query_grid(
     dataset_id: str,
     downsample: int = Query(15),
+    check_rp:   str = Query('None'),
 ):
     if dataset_id not in DATASETS:
         raise HTTPException(404, "Dataset not found")
@@ -204,9 +205,16 @@ async def query_grid(
     ds = open_zarr(ds_config["zarr_file"])
 
     # topo 不參與判斷
-    check_vars = ["flood100","flood50","flood25",
-                  "surge100","surge50","surge25"]
-
+    if check_rp=="None":
+        check_vars = ["flood100","flood50","flood25",
+                      "surge100","surge50","surge25"]
+    elif check_rp=="25yr":
+        check_vars = ["flood25", "surge25"]
+    elif check_rp=="50yr":
+        check_vars = ["flood50", "surge50"]
+    elif check_rp=="100yr":
+        check_vars = ["flood100", "surge100"]
+        
     sample   = ds[check_vars[0]][::downsample, ::downsample]
     lons     = [round(float(v), 4) for v in sample.lon.values]
     lats     = [round(float(v), 4) for v in sample.lat.values]
