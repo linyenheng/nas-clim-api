@@ -38,4 +38,21 @@ DATASETS = {
         "color_group2": ["#f87171","#fca5a5","#fecaca"],
         "ts_style": "line",
     },
+
+
+
+    # Tank return surge, flood, and winds
+    "tank_surge": {
+        "label":    "Tank Hazards",
+        "zarr_file": "return_tank_levels",   # 對應 data/return_water_levels.zarr
+        "has_time": False,                     # 這個檔案沒有 time
+        "variables": [
+            "flood100", "flood50", "flood25",
+            "surge100", "surge50", "surge25",
+            "mwspd100", "mwspd50", "mwspd25", 
+        ],
+        "color_group1": ["#0ea5e9","#0284c7","#0369a1"],  # flood
+        "color_group2": ["#8b5cf6","#7c3aed","#6d28d9"],  # surge
+        "ts_style": "bar",   # 沒有 time，只能用 bar
+    },
 }
