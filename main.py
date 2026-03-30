@@ -290,7 +290,7 @@ def build_ast_cache():
         ds2 = open_zarr("return_tank_levels")
         ds2 = ds2.rename_dims({"OBJECTID":"AST_ID"})
         ds2 = ds2.rename({"OBJECTID":"AST_ID"})
-        ds = ds1.merge(ds2)
+        ds = ds1.merge(ds2, fill_value=0.0)
         
         lats    = ds.Latitude.values
         lons    = ds.Longitude.values
