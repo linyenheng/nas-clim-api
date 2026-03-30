@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY main.py data_sets.py ./
 COPY return_water_levels.tar.gz ./
+COPY return_tank_levels.tar.gz ./
 COPY fragility_1942.tar.gz ./
 
 COPY entrypoint.sh .

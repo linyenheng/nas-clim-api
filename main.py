@@ -192,6 +192,7 @@ async def query_timeseries(
 async def query_grid(
     dataset_id: str,
     downsample: int = Query(15),
+    check_rp:   str = Query('None'),
 ):
     if dataset_id not in DATASETS:
         raise HTTPException(404, "Dataset not found")
@@ -204,8 +205,15 @@ async def query_grid(
     ds = open_zarr(ds_config["zarr_file"])
 
     # topo 不參與判斷
-    check_vars = ["flood100","flood50","flood25",
-                  "surge100","surge50","surge25"]
+    if check_rp=="None":
+        check_vars = ["flood100","flood50","flood25",
+                      "surge100","surge50","surge25"]
+    elif check_rp=="25yr":
+        check_vars = ["flood25", "surge25"]
+    elif check_rp=="50yr":
+        check_vars = ["flood50", "surge50"]
+    elif check_rp=="100yr":
+        check_vars = ["flood100", "surge100"]
 
     sample   = ds[check_vars[0]][::downsample, ::downsample]
     lons     = [round(float(v), 4) for v in sample.lon.values]
@@ -239,31 +247,6 @@ async def get_fragility_points():
         raise HTTPException(503, "Fragility data not ready yet")
     return _ast_points_cache
 
-    ds = open_zarr(ds_config["zarr_file"])
-
-    lats    = ds.Latitude.values
-    lons    = ds.Longitude.values
-    ids     = ds.AST_ID.values
-    types   = ds.Type.values
-    heights = ds.Height.values
-
-    points = []
-    for i in range(len(ids)):
-        pf = ds.Pf_System_[i].values
-        sv = ds.Spill_Volume_[i].values
-        points.append({
-            "ast_id":  int(ids[i]),
-            "lat":     round(float(lats[i]), 6),
-            "lon":     round(float(lons[i]), 6),
-            "type":    str(types[i]),
-            "height":  round(float(heights[i]), 2),
-            "pf_mean": round(float(np.mean(pf)), 6),
-            "pf_std":  round(float(np.std(pf)),  6),
-            "sv_mean": round(float(np.mean(sv)), 4),
-            "sv_std":  round(float(np.std(sv)),  4),
-        })
-
-    return {"points": points, "count": len(points)}
 
 #  Fragility clicking
 @app.get("/fragility/ast/{ast_id}")
@@ -294,6 +277,16 @@ async def get_ast_detail(ast_id: int):
             "mean": pt["sv_mean"],
             "std":  pt["sv_std"],
         },
+        "flood25":  pt["flood25"],
+        "flood50":  pt["flood50"],
+        "flood100": pt["flood100"],
+        "surge25":  pt["surge25"],
+        "surge50":  pt["surge50"],
+        "surge100": pt["surge100"],
+        "wind25":  pt["mwspd25"],
+        "wind50":  pt["mwspd50"],
+        "wind100": pt["mwspd100"],
+        
     }
 
 
@@ -303,7 +296,12 @@ _ast_points_cache = None
 def build_ast_cache():
     global _ast_points_cache
     try:
-        ds      = open_zarr("fragility_1942")
+        ds1 = open_zarr("fragility_1942")
+        ds2 = open_zarr("return_tank_levels")
+        ds2 = ds2.rename_dims({"OBJECTID":"AST_ID"})
+        ds2 = ds2.rename({"OBJECTID":"AST_ID"})
+        ds = ds1.merge(ds2, fill_value=0.0)
+        
         lats    = ds.Latitude.values
         lons    = ds.Longitude.values
         ids     = ds.AST_ID.values
@@ -318,6 +316,21 @@ def build_ast_cache():
         sv_mean = np.mean(sv_all, axis=1)
         sv_std  = np.std(sv_all,  axis=1)
 
+        flood25 = ds.flood25 .values
+        flood50 = ds.flood50 .values
+        flood100= ds.flood100.values 
+        surge25 = ds.surge25 .values
+        surge50 = ds.surge50 .values
+        surge100= ds.surge100.values
+        mwspd25 = ds.mwspd25 .values
+        mwspd50 = ds.mwspd50 .values
+        mwspd100= ds.mwspd100.values
+
+
+
+
+
+        
         points = []
         for i in range(len(ids)):
             points.append({
@@ -330,6 +343,15 @@ def build_ast_cache():
                 "pf_std":  round(float(pf_std[i]),  6),
                 "sv_mean": round(float(sv_mean[i]), 4),
                 "sv_std":  round(float(sv_std[i]),  4),
+                "flood25":   round(float(flood25 [i]),  4),
+                "flood50":   round(float(flood50 [i]),  4),
+                "flood100":  round(float(flood100[i]),  4),
+                "surge25":   round(float(surge25 [i]),  4),
+                "surge50":   round(float(surge50 [i]),  4),
+                "surge100":  round(float(surge100[i]),  4),
+                "mwspd25":   round(float(mwspd25 [i]),  4),
+                "mwspd50":   round(float(mwspd50 [i]),  4),
+                "mwspd100":  round(float(mwspd100[i]),  4),
             })
 
         _ast_points_cache = {"points": points, "count": len(points)}

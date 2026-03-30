@@ -10,6 +10,13 @@ if [ ! -d "data/return_water_levels.zarr" ]; then
     rm return_water_levels.tar.gz
 fi
 
+# Tank surge data
+if [ ! -d "data/return_tank_levels.zarr" ]; then
+    echo "==> Extracting wave surge data..."
+    tar -xzf return_tank_levels.tar.gz -C data/
+    rm return_tank_levels.tar.gz
+fi
+
 # Fragility data
 if [ ! -d "data/fragility_1942.zarr" ]; then
     echo "==> Extracting fragility data..."
